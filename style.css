@@ -1,0 +1,73 @@
+body{
+
+    background:#f4f4f4;
+
+    font-family:sans-serif;
+
+    margin:0;
+
+}
+
+.container{
+
+    max-width:700px;
+
+    margin:auto;
+
+    padding:20px;
+
+}
+
+h1{
+
+    text-align:center;
+
+}
+
+.card{
+
+    background:white;
+
+    padding:15px;
+
+    margin-top:15px;
+
+    border-radius:10px;
+
+}
+
+input{
+
+    width:70%;
+
+    padding:10px;
+
+}
+
+button{
+
+    padding:10px 20px;
+
+    cursor:pointer;
+
+}
+
+select{
+
+    width:100%;
+
+    padding:10px;
+
+    font-size:16px;
+
+}
+
+#mapBtn{
+
+    width:100%;
+
+    margin-top:20px;
+
+    font-size:18px;
+
+}
