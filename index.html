@@ -1,54 +1,81 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>配送指示書ナビ Ver0.1</title>
-
- <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>配送指示書ナビ</title>
+  <link rel="stylesheet" href="./css/style.css">
 </head>
+
 <body>
 
-<div class="container">
+  <!-- ヘッダー -->
+  <header class="app-header">
+    <h1>🚚 配送指示書ナビ</h1>
 
-    <h1>🚚 配送指示書ナビ Ver0.1</h1>
+    <!-- 設定ボタン（将来用） -->
+    <button id="settingsBtn" class="icon-btn">⚙️</button>
+  </header>
 
-    <div class="card">
-        <label>Google Drive検索</label>
-        <div class="search-box">
-            <input type="text" id="driveSearch" placeholder="ファイル名を入力">
-            <button id="searchBtn">検索</button>
-        </div>
-    </div>
+  <!-- メイン -->
+  <main class="container">
 
-    <div class="card">
-        <label>配送指示書</label><br>
-        <input type="file" id="fileInput" accept=".pdf,image/*">
-    </div>
+ <!-- ファイル選択 -->
+<section class="card">
+  <h2>📄 配送指示書を選択</h2>
+  <input type="file" id="fileInput" accept="application/pdf,image/*" />
+</section>
 
-    <div class="card">
-        <label>配送先</label><br>
+<!-- プレビュー -->
+<section class="card">
+  <h2>プレビュー</h2>
+  <div id="previewArea" class="preview-area">
+    <p class="placeholder">PDF・画像がここに表示されます</p>
+  </div>
+</section>
 
-        <select id="destination">
-            <option>選択してください</option>
-        </select>
-    </div>
+<!-- 配送先（OCR結果） -->
+<section class="card">
+  <h2>配送先</h2>
+  <div id="deliveryStatus">▼ 読み取り前</div>
+</section>
 
-    <div class="card">
-        <label>住所</label>
+<!-- OCR結果 -->
+<section class="card">
+  <h2>🧠 OCR結果</h2>
+  <div id="ocrText" class="ocr-box">
+    （未処理）
+  </div>
+</section>
 
-        <p id="address">
-            まだ選択されていません
-        </p>
-    </div>
+<!-- 配送先マスター -->
+<section class="card">
+  <h2>📦 配送先マスター</h2>
+  <input type="file" id="csvInput" accept=".csv" />
+  <div id="masterStatus">（未読み込み）</div>
+</section>
 
-    <button id="mapBtn">
-        📍 Google Maps
-    </button>
+<!-- Google Drive -->
+<section class="card">
+  <h2>Google Drive</h2>
+  <div id="driveStatus">（未検索）</div>
+</section>
 
-</div>
+<!-- OpenStreetMap -->
+<section class="card">
+  <h2>OpenStreetMap</h2>
+  <div id="osmStatus">（未表示）</div>
+</section>
 
- <script src="script.js"></script>
+<!-- Google Maps -->
+<section class="card">
+  <h2>📍 Google Maps</h2>
+  <div id="mapStatus"></div>
+</section>
+  </main>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/app.js"></script>
 
 </body>
 </html>
