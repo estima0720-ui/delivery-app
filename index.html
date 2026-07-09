@@ -4,77 +4,64 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>配送指示書ナビ</title>
+
   <link rel="stylesheet" href="./css/style.css">
 </head>
 
 <body>
 
-  <!-- ヘッダー -->
-  <header class="app-header">
-    <h1>🚚 配送指示書ナビ</h1>
+<header class="app-header">
+  <h1>🚚 配送指示書ナビ</h1>
+</header>
 
-    <!-- 設定ボタン（将来用） -->
-    <button id="settingsBtn" class="icon-btn">⚙️</button>
-  </header>
+<main class="container">
 
-  <!-- メイン -->
-  <main class="container">
+  <section class="card">
+    <h2>📄 ファイル選択</h2>
+    <input type="file" id="fileInput" accept="image/*,application/pdf" />
+  </section>
 
- <!-- ファイル選択 -->
-<section class="card">
-  <h2>📄 配送指示書を選択</h2>
-  <input type="file" id="fileInput" accept="application/pdf,image/*" />
-</section>
+  <section class="card">
+    <h2>🖼 プレビュー</h2>
+    <div id="previewArea"></div>
+  </section>
 
-<!-- プレビュー -->
-<section class="card">
-  <h2>プレビュー</h2>
-  <div id="previewArea" class="preview-area">
-    <p class="placeholder">PDF・画像がここに表示されます</p>
-  </div>
-</section>
+  <section class="card">
+    <h2>🧠 OCR結果</h2>
+    <div id="ocrText">（未処理）</div>
+  </section>
 
-<!-- 配送先（OCR結果） -->
-<section class="card">
-  <h2>配送先</h2>
-  <div id="deliveryStatus">▼ 読み取り前</div>
-</section>
+  <section class="card">
+    <h2>📦 ランキング</h2>
+    <div id="driveList"></div>
+  </section>
 
-<!-- OCR結果 -->
-<section class="card">
-  <h2>🧠 OCR結果</h2>
-  <div id="ocrText" class="ocr-box">
-    （未処理）
-  </div>
-</section>
+  <section class="card">
+    <h2>📂 Google Drive</h2>
+    <button id="loginBtn">Googleログイン</button>
+    <div id="driveUser">未ログイン</div>
+    
+    <!-- 新設：参考写真フォルダへのダイレクトリンク -->
+    <div class="folder-link-area" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 14px;">
+      <span style="margin-right: 5px;">📂</span>
+      <a id="driveFolderLink" 
+         href="https://drive.google.com/drive/folders/1gnQl5Tbsn-CIZgI5xF3h0Twqe9IucqEw" 
+         target="_blank" 
+         rel="noopener noreferrer" 
+         style="color: #1a73e8; text-decoration: none; font-weight: bold;">
+        「001_台帳」（丸トラ台帳）フォルダ（Google ドライブ）を開く
+      </a>
+    </div>
+  </section>
 
-<!-- 配送先マスター -->
-<section class="card">
-  <h2>📦 配送先マスター</h2>
-  <input type="file" id="csvInput" accept=".csv" />
-  <div id="masterStatus">（未読み込み）</div>
-</section>
+</main>
 
-<!-- Google Drive -->
-<section class="card">
-  <h2>Google Drive</h2>
-  <div id="driveStatus">（未検索）</div>
-</section>
+<script src="https://accounts.google.com/gsi/client"></script>
 
-<!-- OpenStreetMap -->
-<section class="card">
-  <h2>OpenStreetMap</h2>
-  <div id="osmStatus">（未表示）</div>
-</section>
-
-<!-- Google Maps -->
-<section class="card">
-  <h2>📍 Google Maps</h2>
-  <div id="mapStatus"></div>
-</section>
-  </main>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="./js/ui.js"></script>
+<!-- 旧MATCHER廃止に伴い、matcher.js の読み込みタグを削除しました -->
+<script src="./js/drive.js"></script>
+<script src="./config.local.js"></script> <!-- app.jsの前にロードします -->
 <script src="./js/app.js"></script>
 
 </body>

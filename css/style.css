@@ -84,7 +84,7 @@ input[type="file"] {
 }
 
 /* =====================
-   プレビュー領域
+   プレビュー領域（🔥修正ここ重要）
 ===================== */
 .preview-area {
   min-height: 300px;
@@ -94,15 +94,20 @@ input[type="file"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: auto;   /* ←変更（hidden → auto） */
 }
 
+/* 🔥画像が見えない問題対策 */
 .preview-area img,
 .preview-area canvas {
   max-width: 100%;
-  height: auto;
+  max-height: 100%;   /* ←追加 */
+  display: block;     /* ←追加（超重要） */
 }
 
+/* =====================
+   プレースホルダー
+===================== */
 .placeholder {
   color: var(--muted);
   font-size: 14px;
@@ -120,7 +125,7 @@ input[type="file"] {
 }
 
 /* =====================
-   ホバー（将来拡張用）
+   ホバー
 ===================== */
 .card:hover {
   border-color: #cbd5e1;
@@ -138,6 +143,10 @@ input[type="file"] {
     font-size: 16px;
   }
 }
+
+/* =====================
+   OCRボックス
+===================== */
 .ocr-box {
   min-height: 120px;
   font-size: 13px;
