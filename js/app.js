@@ -3,7 +3,7 @@
 // ==========================================
 // ★ 【本番モードへ切り替え】
 // テストモード（本物のAIは呼ばず、無料回数を消費しません）
-const IS_TEST_MODE = true;
+const IS_TEST_MODE = false;
 
 function getGeminiApiKey() {
   const savedKey = localStorage.getItem("user_gemini_api_key");
