@@ -256,7 +256,7 @@ async function resizeAndCompressImage(base64DataUrl, maxWidth = 1024, quality = 
 }
 
 // ==========================================
-// 5. 自動的に少し待ってリトライする通信用の便利ツール
+// 5. 自動的に少し待ってリretryする通信用の便利ツール
 // ==========================================
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -345,7 +345,7 @@ async function verifyFileContentWithGemini(blob, mimeType, targetSS) {
 
   const activeKey = getGeminiApiKey();
   if (!activeKey) {
-    throw new Error("GeminiのAPIキーが設定されていません。");
+    throw new Error("Gemini of APIキーが設定されていません。");
   }
 
   let base64Data = await new Promise((resolve) => {
@@ -358,7 +358,7 @@ async function verifyFileContentWithGemini(blob, mimeType, targetSS) {
   });
 
   if (mimeType.startsWith("image/")) {
-    const rawDataUrl = `data:${mimeType};base64,${base64Data}`;
+    const rawDataUrl = `data:${mimeType};base64,base64Data`;
     const compressedUrl = await resizeAndCompressImage(rawDataUrl, 1024, 0.6);
     base64Data = compressedUrl.split(',')[1];
   }
@@ -614,8 +614,9 @@ function renderRankingInContainer(container, files) {
       ? `<button onclick="window.open('https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}', '_blank')" style="margin-top: 5px; margin-left: 8px; background-color: #34a853; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">🗺 Googleマップ</button>`
       : "";
 
+    // ★ 修正点1: 「簡易地図を作成」から「簡易地図検索」に表示テキストを変更
     const miniMapButtonHtml = `
-      <button onclick="openMiniMap('${escapeJSString(f.name)}')" style="margin-top: 5px; margin-left: 8px; background-color: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">📁 簡易地図を作成</button>
+      <button onclick="openMiniMap('${escapeJSString(f.name)}')" style="margin-top: 5px; margin-left: 8px; background-color: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">📁 簡易地図検索</button>
     `;
 
     return `
@@ -632,7 +633,7 @@ function renderRankingInContainer(container, files) {
 }
 
 // ==========================================
-// ★【大幅改修】Googleドライブ超高速ルート図プレビュー
+// ★ 修正点3: Googleドライブ周辺図・ルート図（最大3件同時並列ロードプレビュー）
 // ==========================================
 async function openMiniMap(fileName) {
   // 1) 先にモーダル枠を「検索中ローディング」の状態で生成する
@@ -652,13 +653,14 @@ async function openMiniMap(fileName) {
   modal.style.justifyContent = "center";
   modal.style.alignItems = "center";
 
+  // 複数並べるため、max-width を 950px へ広げました
   modal.innerHTML = `
-    <div style="background: white; width: 90%; max-width: 750px; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; font-family: sans-serif; text-align: center;">
+    <div style="background: white; width: 95%; max-width: 950px; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; font-family: sans-serif; text-align: center;">
       <h3 style="margin-top: 0; color: #1e50a2; font-size: 18px; border-bottom: 2px solid #1e50a2; padding-bottom: 8px; text-align: left;">🗺 周辺図・ルート図の検索</h3>
       <div style="padding: 50px 0;">
-        <div style="font-size: 24px; margin-bottom: 12px; font-weight: bold; color: #1e50a2; animation: pulse 1.5s infinite;">🔍 Googleドライブから進入ルート図を検索中...</div>
-        <div style="font-size: 14px; color: #666; margin-bottom: 5px;">「001_台帳」等のフォルダ内から、この店舗の進入図（画像・PDF）を瞬時に探しています。</div>
-        <div style="font-size: 12px; color: #999;">※1万件以上のファイルがあっても、独自の検索システムにより約1秒で完了します。</div>
+        <div style="font-size: 24px; margin-bottom: 12px; font-weight: bold; color: #1e50a2;">🔍 Googleドライブから進入ルート図を検索中...</div>
+        <div style="font-size: 14px; color: #666; margin-bottom: 5px;">「001_台帳」等のフォルダ内から、この店舗の進入図（画像・PDF）を自動探索しています。</div>
+        <div style="font-size: 12px; color: #999;">※1万件以上のファイルがあっても、高速インデックス検索システムにより約1秒で完了します。</div>
       </div>
       <button onclick="document.getElementById('miniMapModal').remove()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">✕</button>
     </div>
@@ -693,27 +695,65 @@ async function openMiniMap(fileName) {
     const foundFiles = await searchDriveFile(searchKeyword);
 
     if (foundFiles && foundFiles.length > 0) {
-      // 1件目のファイルをダウンロードしてプレビュー表示
-      const targetFile = foundFiles[0];
-      const blob = await downloadDriveFile(targetFile.id);
-      const blobUrl = URL.createObjectURL(blob);
+      // 最大3件までを取得・表示対象とする
+      const filesToShow = foundFiles.slice(0, 3);
+      
+      // 複数ファイルを非同期並行で一括ダウンロード
+      const previewItems = await Promise.all(
+        filesToShow.map(async (file) => {
+          try {
+            const blob = await downloadDriveFile(file.id);
+            const url = URL.createObjectURL(blob);
+            const isPdf = file.mimeType === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+            return { id: file.id, name: file.name, url, isPdf };
+          } catch (e) {
+            console.error(`ファイルの取得に失敗しました: ${file.name}`, e);
+            return null; // ダウンロードエラーがあったファイルは除外
+          }
+        })
+      );
 
-      const isPdf = targetFile.mimeType === "application/pdf" || targetFile.name.toLowerCase().endsWith(".pdf");
+      // 取得成功したファイルのみ抽出
+      const validPreviews = previewItems.filter(item => item !== null);
 
-      let previewHtml = "";
-      if (isPdf) {
-        previewHtml = `<embed src="${blobUrl}" type="application/pdf" style="width:100%; height:100%; border:none;">`;
-      } else {
-        previewHtml = `<img src="${blobUrl}" style="max-width:100%; max-height:100%; object-fit: contain; border-radius:4px; display:block; margin:0 auto;">`;
+      if (validPreviews.length === 0) {
+        throw new Error("該当ファイルのダウンロード処理に失敗しました。");
       }
 
-      // 他にも該当するファイルが見つかった場合は候補リストを表示
+      // プレビュー表示枠の分割幅（1件: 100%, 2件: 49%, 3件: 32%）
+      const itemWidth = validPreviews.length === 1 ? "100%" : validPreviews.length === 2 ? "49%" : "32%";
+
+      let previewHtml = `<div style="display: flex; gap: 12px; width: 100%; height: 100%; justify-content: center; align-items: stretch;">`;
+
+      validPreviews.forEach(item => {
+        let contentHtml = "";
+        if (item.isPdf) {
+          contentHtml = `<embed src="${item.url}" type="application/pdf" style="width:100%; height:100%; border:none;">`;
+        } else {
+          contentHtml = `<img src="${item.url}" style="max-width:100%; max-height:100%; object-fit: contain; border-radius:4px; display:block; margin:auto;">`;
+        }
+
+        previewHtml += `
+          <div style="width: ${itemWidth}; min-width: 200px; display: flex; flex-direction: column; border: 1px solid #ccc; border-radius: 6px; background: #fff; padding: 6px; box-sizing: border-box; height: 100%;">
+            <div style="font-size: 11px; font-weight: bold; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; margin-bottom: 6px; color: #1e50a2; text-align: left; border-bottom: 1px solid #eee; padding-bottom: 4px;" title="${escapeHtml(item.name)}">
+              📄 ${escapeHtml(item.name)}
+            </div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #fafafa; border-radius: 4px;">
+              ${contentHtml}
+            </div>
+          </div>
+        `;
+      });
+
+      previewHtml += `</div>`;
+
+      // 4件目（3件を超える）以降がある場合は、別途候補リストを表示する
       let otherCandidatesHtml = "";
-      if (foundFiles.length > 1) {
+      if (foundFiles.length > 3) {
         otherCandidatesHtml = `
           <div style="margin-top: 10px; font-size: 11px; color: #444; background: #f9f9f9; padding: 8px; border-radius: 4px; border: 1px solid #eee; text-align: left;">
             💡 <b>同じ店舗名を含むその他の関連ファイル（別タブで開く）:</b><br>
-            ${foundFiles.slice(1).map(f => {
+            ${foundFiles.slice(3).map(f => {
               const url = f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`;
               return `<a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: underline; margin-right: 15px; font-weight: bold;">📄 ${escapeHtml(f.name)}</a>`;
             }).join("")}
@@ -721,19 +761,19 @@ async function openMiniMap(fileName) {
         `;
       }
 
-      // モーダルを「ルート図表示」へ書き換え
+      // モーダル表示全体の書き換え
       modal.innerHTML = `
-        <div style="background: white; width: 90%; max-width: 750px; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; font-family: sans-serif;">
+        <div style="background: white; width: 95%; max-width: 950px; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); position: relative; font-family: sans-serif;">
           <h3 style="margin-top: 0; color: #1e50a2; font-size: 18px; border-bottom: 2px solid #1e50a2; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; text-align: left;">
-            <span>🗺 ドライブ内ルート図・進入図: ${escapeHtml(targetFile.name)}</span>
+            <span>🗺 ドライブ内ルート図・進入図（最大3件表示）</span>
             <span style="font-size: 11px; background: #2e7d32; color: white; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">🟢 ドライブ連携OK</span>
           </h3>
           <p style="font-size: 12px; color: #555; margin-bottom: 12px; text-align: left;">
-            キーワード「<b>${escapeHtml(searchKeyword)}</b>」をドライブ内の1万件のファイルから瞬時に検出し、プレビュー表示しています。
+            キーワード「<b>${escapeHtml(searchKeyword)}</b>」をドライブから高速検索し、最大3件の図面を並べてプレビューしています。
           </p>
           
-          <!-- プレビュー枠 -->
-          <div id="miniMapContainer" style="width: 100%; height: 420px; background: #fcfcfc; border-radius: 4px; overflow: hidden; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center;">
+          <!-- プレビュー枠（高さを少し広げました） -->
+          <div id="miniMapContainer" style="width: 100%; height: 460px; background: #fcfcfc; border-radius: 4px; overflow: hidden; border: 1px solid #ccc; padding: 8px; box-sizing: border-box;">
             ${previewHtml}
           </div>
 
@@ -741,17 +781,16 @@ async function openMiniMap(fileName) {
 
           <button onclick="document.getElementById('miniMapModal').remove()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">✕</button>
           <div style="margin-top: 15px; text-align: right; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 11px; color: #888;">図面が古い場合や、ない場合は右のボタンから通常のGoogleマップに切り替えられます。</span>
+            <span style="font-size: 11px; color: #888;">図面が古い場合やない場合は、右のボタンから通常のGoogleマップに切り替えることができます。</span>
             <div>
               <button onclick="switchToGoogleMap('${escapeJSString(fileName)}')" style="background-color: #34a853; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s;">🗺 Googleマップを表示</button>
-              <button onclick="document.getElementById('miniMapModal').remove()" style="margin-left: 8px; background-color: #7f8c8d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: 0.2s;">閉じる</button>
+              <button onclick="document.getElementById('miniMapModal').remove()" style="margin-left: 8px; background-color: #7f8c8d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px;">閉じる</button>
             </div>
           </div>
         </div>
       `;
 
     } else {
-      // 検索に該当するファイルがなかった場合はGoogleマップを自動表示
       showFallbackGoogleMap(modal, fileName, `「${searchKeyword}」に合致する進入図・ルート図が「001_台帳」フォルダ内等に見当たりませんでした。`);
     }
 
@@ -792,11 +831,9 @@ async function searchDriveFile(keyword) {
     throw new Error("Google Driveへのアクセス権（アクセストークン）が見つかりませんでした。Googleログインを行ってください。");
   }
 
-  // クエリ作成：ファイル名に店舗キーワードを含み、画像またはPDFであり、ゴミ箱に入っていないもの
-  const cleanKeyword = keyword.replace(/['\\]/g, ""); // クエリを壊す記号を最低限排除
+  const cleanKeyword = keyword.replace(/['\\]/g, ""); 
   const q = `name contains '${cleanKeyword}' and (mimeType contains 'image/' or mimeType = 'application/pdf') and trashed = false`;
   
-  // 1万件の中から一瞬で探すため、インデックス経由 of API（qパラメータ）を使用し、上位5件を要求
   const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,webViewLink)&pageSize=5`;
 
   const response = await fetch(url, {
@@ -882,6 +919,7 @@ async function runGeminiOCR(base64DataUrl) {
   const mimeType = matches[1];
   const base64Data = matches[2];
 
+  // ★ 修正点2: 車両ナンバー［ ］、[ ] の周辺文字列・誤認識ケース考慮のためのプロンプト強化
   const prompt = `
     配送指示書の画像またはPDFから、以下の情報を正確に読み取って指定のJSONフォーマットで出力してください。
 
@@ -891,9 +929,11 @@ async function runGeminiOCR(base64DataUrl) {
        - 住所 (address): 各届先名称に対応する「配送先住所」を正確に抽出してください。必ず届先名称と対応する正しい住所を1対1でペアにしてください。
 
     2. 車両ナンバー (vehicleNumber):
-       - 指示書の紙面上に、半角カッコ「[ ]」または全角カッコ「［ ］」に囲まれた状態で「足立100あ9999」や「練馬300わ1234」などの地名から始まる自動車登録番号（ナンバープレートの情報）が記載されています。
-       - このカッコ［ ］、[ ] に囲まれている車両ナンバー情報を正確に見つけ出して抽出してください。
-       - 抽出する際は、カッコ自体は含めずにカッコの中身のみ（例: "足立100あ9999"）にしてください。
+       - 指示書の紙面上にある「車番」「車両」「乗務車」などの表記の周囲、あるいは指示書の任意の場所に、半角カッコ「[ ]」または全角カッコ「［ ］」に囲まれたテキスト（例: [足立100あ9999] や ［練馬300わ1234］ など）がないか探してください。
+       - このカッコ「[ ]」「［ ］」に囲まれている自動車登録番号（ナンバープレートの情報）を確実に見つけ出して抽出してください。
+       - 「足立100あ9999」や「練馬 300 わ 1234」のように、地名・分類番号・ひらがな・一連指定番号で構成される文字列を探してください。
+       - 抽出する際は、カッコ自体や前後の「車番:」などの不要な文言は含めず、カッコの中身のナンバープレート情報のみ（例: "足立100あ9999"）にしてください。
+       - カッコの表記が若干崩れていたり（例：[足立100あ9999 のように片方だけなど）、OCRの誤認識で ( ) や { }、【 】 などに認識されている場合でも、車番情報と思われる箇所であれば柔軟に補正して中身を抽出してください。
        - 該当する情報が見当たらない場合は、空文字 "" としてください。
   `;
 
@@ -951,7 +991,7 @@ async function runGeminiOCR(base64DataUrl) {
 }
 
 // ==========================================
-// 12. 補助ユーティリティ関数群（★マージ漏れを完全補強）
+// 12. 補助ユーティリティ関数群
 // ==========================================
 function escapeHtml(str) {
   if (typeof str !== 'string') return str;
