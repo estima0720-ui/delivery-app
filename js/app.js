@@ -796,7 +796,7 @@ async function searchDriveFile(keyword) {
   const cleanKeyword = keyword.replace(/['\\]/g, ""); // クエリを壊す記号を最低限排除
   const q = `name contains '${cleanKeyword}' and (mimeType contains 'image/' or mimeType = 'application/pdf') and trashed = false`;
   
-  // 1万件の中から一瞬で探すため、インデックス経由のAPI（qパラメータ）を使用し、上位5件を要求
+  // 1万件の中から一瞬で探すため、インデックス経由 of API（qパラメータ）を使用し、上位5件を要求
   const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,webViewLink)&pageSize=5`;
 
   const response = await fetch(url, {
@@ -949,4 +949,109 @@ async function runGeminiOCR(base64DataUrl) {
     throw new Error(`JSONパース失敗: ${e.message}`);
   }
 }
---- END OF FILE Paste July 11, 2026 - 10:57AM ---
+
+// ==========================================
+// 12. 補助ユーティリティ関数群（★マージ漏れを完全補強）
+// ==========================================
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+}
+
+function escapeJSString(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function cleanNameForMatching(str) {
+  if (typeof str !== 'string') return "";
+  let s = str.normalize("NFKC")
+             .replace(/\.(pdf|xlsx|xls)$/i, "")
+             .replace(/[\s　・._\-()（）[\]「」+]/g, "")
+             .toLowerCase();
+             
+  const ignoreWords = [
+    "eneos", "enejet", "dd", "セルフ", "ss", "店", "石油", 
+    "鉱油", "商事", "配送", "指示", "指示書", "更新", "16kl"
+  ];
+  ignoreWords.forEach(word => {
+    s = s.replaceAll(word, "");
+  });
+  return s;
+}
+
+const BROAD_KEYWORDS = [
+  "東京", "神奈川", "千葉", "埼玉", "環七", "環八", "国道", 
+  "街道", "16号", "246", "バイパス", "インター", "東日本", "西日本"
+];
+
+function calculateFuzzyScore(item, filename) {
+  if (!item || !item.fullName || !filename) return 0;
+
+  const qClean = cleanNameForMatching(item.fullName);
+  const fClean = cleanNameForMatching(filename);
+
+  if (!qClean || !fClean) return 0;
+
+  if (qClean === fClean) return 100;
+  if (qClean.includes(fClean) || fClean.includes(qClean)) return 95;
+
+  const qJP = qClean.replace(/[a-z0-9]/g, "");
+  const fJP = fClean.replace(/[a-z0-9]/g, "");
+  if (qJP.length >= 2 && fJP.length >= 2) {
+    if (qJP.includes(fJP) || fJP.includes(qJP)) {
+      return 92;
+    }
+  }
+
+  if (item.coreKeyword && item.coreKeyword.length >= 2) {
+    const coreClean = cleanNameForMatching(item.coreKeyword);
+    const isBroad = BROAD_KEYWORDS.some(broad => coreClean === broad);
+
+    if (coreClean && coreClean.length >= 2 && !isBroad) {
+      if (fClean.includes(coreClean)) {
+        return 85; 
+      }
+    }
+  }
+
+  let addressScore = 0;
+  if (item.address && item.address.trim() !== "") {
+    const addrClean = item.address.normalize("NFKC").replace(/[0-9\-ー 　[\]()（）]/g, "");
+    const kanjiLocalities = addrClean.match(/[\u4e00-\u9faf]{2,}/g) || [];
+    
+    for (const locality of kanjiLocalities) {
+      if (["東京都", "神奈川県", "埼玉県", "千葉県", "都内", "県内"].includes(locality)) continue;
+      
+      const cleanLocality = cleanNameForMatching(locality.replace(/[市区町村]/g, ""));
+      if (cleanLocality && cleanLocality.length >= 2) {
+        if (fClean.includes(cleanLocality)) {
+          const isDistrict = locality.endsWith("区") || locality.endsWith("市") || locality.endsWith("町") || locality.endsWith("村");
+          const score = isDistrict ? 82 : 90;
+          addressScore = Math.max(addressScore, score);
+        }
+      }
+    }
+  }
+  if (addressScore > 0) return addressScore;
+
+  const getBigrams = (str) => {
+    const bigrams = new Set();
+    for (let i = 0; i < str.length - 1; i++) {
+      bigrams.add(str.substring(i, i + 2));
+    }
+    return bigrams;
+  };
+
+  const b1 = getBigrams(qClean);
+  const b2 = getBigrams(fClean);
+  if (b1.size === 0 || b2.size === 0) return 0;
+
+  let intersection = 0;
+  for (const val of b1) {
+    if (b2.has(val)) intersection++;
+  }
+
+  const matchRatio = Math.round((2 * intersection / (b1.size + b2.size)) * 100);
+  return matchRatio;
+}
