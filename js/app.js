@@ -949,3 +949,4 @@ async function runGeminiOCR(base64DataUrl) {
     throw new Error(`JSONパース失敗: ${e.message}`);
   }
 }
+--- END OF FILE Paste July 11, 2026 - 10:57AM ---
