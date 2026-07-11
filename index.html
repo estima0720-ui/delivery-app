@@ -16,42 +16,81 @@
 
 <main class="container">
 
-  <section class="card">
-    <h2>📄 ファイル選択</h2>
-    <input type="file" id="fileInput" accept="image/*,application/pdf" />
+  <!-- 1. 準備・設定 & 台帳リンク（最上部へ移動・統合） -->
+  <section class="card" style="border: 2px solid #1e50a2; background-color: #fafcff;">
+    <h2>⚙️ 準備・設定 & 台帳リンク</h2>
+    
+    <!-- 台帳フォルダへのリンク -->
+    <div class="folder-link-area" style="margin-bottom: 15px; padding: 12px; background: #eef5fc; border-radius: 6px; font-size: 14px; border-left: 5px solid #1a73e8;">
+      <span style="margin-right: 5px; font-size: 16px;">📂</span>
+      <a id="driveFolderLink" 
+         href="https://drive.google.com/drive/folders/1gnQl5Tbsn-CIZgI5xF3h0Twqe9IucqEw" 
+         target="_blank" 
+         rel="noopener noreferrer" 
+         style="color: #1a73e8; text-decoration: none; font-weight: bold; font-size: 15px;">
+        「001_台帳」（丸トラ台帳）フォルダ（Google ドライブ）を開く
+      </a>
+      <div style="font-size: 11px; color: #d9534f; margin-top: 5px; font-weight: bold;">
+        ※ AI抽出は参考情報です。うまく抽出されない場合は、上のリンクから手動でお調べください。
+      </div>
+    </div>
+
+    <!-- ステータス・ログイン表示エリア -->
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; align-items: center;">
+      <!-- Googleログイン関係 -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button id="loginBtn" style="padding: 6px 12px; font-size: 13px; cursor: pointer; font-weight: bold;">Googleログイン</button>
+        <span id="driveUser" style="font-size: 13px; font-weight: bold; color: #555;">未ログイン</span>
+      </div>
+      
+      <!-- APIキーの入力確認 -->
+      <div style="font-size: 13px;">
+        🔑 APIキー: <span id="apiKeyStatus" style="font-weight: bold; color: #e74c3c;">確認中...</span>
+      </div>
+
+      <!-- 総合使用OKステータス -->
+      <div id="systemStatusBadge" style="margin-left: auto; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; background: #ffebee; color: #c62828; border: 1px solid currentColor;">
+        ❌ 設定未完了
+      </div>
+    </div>
+
+    <!-- AI機能スイッチ群 -->
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 13px; align-items: center;">
+      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: bold; user-select: none;">
+        <input type="checkbox" id="aiOcrSwitch" checked style="transform: scale(1.2); cursor: pointer;">
+        🧠 AI配送先抽出を行う (デフォルト: ON)
+      </label>
+      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: bold; user-select: none;">
+        <input type="checkbox" id="aiDoubleCheckSwitch" style="transform: scale(1.2); cursor: pointer;">
+        🔍 決定時にAI最終ダブルチェックを行う (デフォルト: OFF)
+      </label>
+    </div>
   </section>
 
+  <!-- 2. ファイル選択（中央配置・ボタン拡大） -->
+  <section class="card">
+    <h2>📄 ファイル選択</h2>
+    <div style="display: flex; justify-content: center; align-items: center; padding: 25px 10px; background-color: #fafafa; border: 2px dashed #ccc; border-radius: 6px;">
+      <input type="file" id="fileInput" accept="image/*,application/pdf" style="font-size: 16px; padding: 10px; cursor: pointer; max-width: 100%; font-weight: bold;" />
+    </div>
+  </section>
+
+  <!-- 3. プレビュー -->
   <section class="card">
     <h2>🖼 プレビュー</h2>
     <div id="previewArea"></div>
   </section>
 
+  <!-- 4. OCR結果 -->
   <section class="card">
     <h2>🧠 OCR結果</h2>
     <div id="ocrText">（未処理）</div>
   </section>
 
+  <!-- 5. ランキング -->
   <section class="card">
     <h2>📦 ランキング</h2>
     <div id="driveList"></div>
-  </section>
-
-  <section class="card">
-    <h2>📂 Google Drive</h2>
-    <button id="loginBtn">Googleログイン</button>
-    <div id="driveUser">未ログイン</div>
-    
-    <!-- 新設：参考写真フォルダへのダイレクトリンク -->
-    <div class="folder-link-area" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #e0e0e0; font-size: 14px;">
-      <span style="margin-right: 5px;">📂</span>
-      <a id="driveFolderLink" 
-         href="https://drive.google.com/drive/folders/1gnQl5Tbsn-CIZgI5xF3h0Twqe9IucqEw" 
-         target="_blank" 
-         rel="noopener noreferrer" 
-         style="color: #1a73e8; text-decoration: none; font-weight: bold;">
-        「001_台帳」（丸トラ台帳）フォルダ（Google ドライブ）を開く
-      </a>
-    </div>
   </section>
 
 </main>
@@ -59,7 +98,6 @@
 <script src="https://accounts.google.com/gsi/client"></script>
 
 <script src="./js/ui.js"></script>
-<!-- 旧MATCHER廃止に伴い、matcher.js の読み込みタグを削除しました -->
 <script src="./js/drive.js"></script>
 <script src="./config.local.js"></script> <!-- app.jsの前にロードします -->
 <script src="./js/app.js"></script>
