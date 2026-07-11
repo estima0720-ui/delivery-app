@@ -1,8 +1,6 @@
 // ==========================================
 // 1. 設定とAPIキー・テストモードの定義
 // ==========================================
-// ★ 【本番モードへ切り替え】
-// テストモード（本物のAIは呼ばず、無料回数を消費しません）
 const IS_TEST_MODE = false;
 
 function getGeminiApiKey() {
@@ -29,6 +27,9 @@ let activeBlobUrl = null;
 // ==========================================
 window.addEventListener("DOMContentLoaded", () => {
   createApiKeyConfigPanel();
+
+  // 定期的に設定状況とログイン状況をチェックして使用OKバッジを更新する
+  setInterval(updateSystemStatusBadge, 1000);
 
   fileInput = document.getElementById("fileInput");
   if (!fileInput) return;
@@ -80,6 +81,13 @@ window.addEventListener("DOMContentLoaded", () => {
         ? targetFile.webViewLink 
         : `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
 
+      // ★対策3：ダブルチェックスイッチがOFFの場合はAIを通さずに即ファイルを開く
+      const doubleCheckSwitch = document.getElementById("aiDoubleCheckSwitch");
+      if (!doubleCheckSwitch || !doubleCheckSwitch.checked) {
+        window.open(targetUrl, "_blank");
+        return;
+      }
+
       const loadingDiv = document.createElement("div");
       loadingDiv.id = "verifyLoading";
       loadingDiv.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); color:white; z-index:10000; display:flex; flex-direction:column; justify-content:center; align-items:center; font-family:sans-serif;";
@@ -122,6 +130,49 @@ window.addEventListener("DOMContentLoaded", () => {
     };
   }
 });
+
+// ==========================================
+// 2-2. 使用OK判定・ステータス更新処理
+// ==========================================
+function updateSystemStatusBadge() {
+  const apiKey = getGeminiApiKey();
+  const hasApiKey = apiKey && apiKey.length > 5;
+
+  // 1) APIキー状態の表示を更新
+  const apiKeyStatusSpan = document.getElementById("apiKeyStatus");
+  if (apiKeyStatusSpan) {
+    if (hasApiKey) {
+      apiKeyStatusSpan.textContent = "設定済み (OK)";
+      apiKeyStatusSpan.style.color = "#27ae60";
+    } else {
+      apiKeyStatusSpan.textContent = "未設定";
+      apiKeyStatusSpan.style.color = "#e74c3c";
+    }
+  }
+
+  // 2) Googleログイン状態の確認
+  const driveUserDiv = document.getElementById("driveUser");
+  const isGoogleLoggedIn = driveUserDiv && driveUserDiv.textContent.trim() !== "未ログイン";
+
+  // 3) 総合バッジの更新
+  const statusBadge = document.getElementById("systemStatusBadge");
+  if (statusBadge) {
+    if (hasApiKey && isGoogleLoggedIn) {
+      statusBadge.textContent = "🟢 システム使用OK";
+      statusBadge.style.backgroundColor = "#e8f5e9";
+      statusBadge.style.color = "#2e7d32";
+      statusBadge.style.borderColor = "#a5d6a7";
+    } else {
+      const missing = [];
+      if (!hasApiKey) missing.push("APIキー");
+      if (!isGoogleLoggedIn) missing.push("ログイン");
+      statusBadge.textContent = `❌ ${missing.join(" & ")}が未完了`;
+      statusBadge.style.backgroundColor = "#ffebee";
+      statusBadge.style.color = "#c62828";
+      statusBadge.style.borderColor = "#ef9a9a";
+    }
+  }
+}
 
 // ==========================================
 // 3. APIキーを設定・保存する画面バー
@@ -377,6 +428,18 @@ function handleFile(e) {
     UI.showImage(activeBlobUrl, file.type);
   }
 
+  // ★対策4：AI配送先抽出スイッチがOFFの場合は、OCRを行わずにスキップする
+  const ocrSwitch = document.getElementById("aiOcrSwitch");
+  if (ocrSwitch && !ocrSwitch.checked) {
+    if (typeof UI !== "undefined" && typeof UI.setOCR === "function") {
+      UI.setOCR("【AI配送先抽出オフ】\n自動解析をスキップしました。\n「001_台帳」フォルダから手動でお調べください。");
+    }
+    if (UI && UI.driveList) {
+      UI.driveList.innerHTML = "AIによる自動照合がオフに設定されています。";
+    }
+    return;
+  }
+
   if (typeof UI !== "undefined" && typeof UI.setOCR === "function") {
     UI.setOCR("指示書解析中... (数秒かかります)");
   }
@@ -435,6 +498,9 @@ function handleFile(e) {
       const displayLines = [];
       if (window.currentVehicleNumber) {
         displayLines.push(`【車両ナンバー】: ${window.currentVehicleNumber}`);
+        displayLines.push(`----------------------------------`);
+      } else {
+        displayLines.push(`【車両ナンバー】: (抽出できませんでした)`);
         displayLines.push(`----------------------------------`);
       }
 
@@ -724,7 +790,7 @@ function calculateFuzzyScore(item, filename) {
 }
 
 // ==========================================
-// 10. 指示書OCR読込
+// 10. 指示書OCR読込（★対策1：プロンプトの調整）
 // ==========================================
 async function runGeminiOCR(base64DataUrl) {
   const activeKey = getGeminiApiKey();
@@ -737,6 +803,7 @@ async function runGeminiOCR(base64DataUrl) {
   const mimeType = matches[1];
   const base64Data = matches[2];
 
+  // カッコで囲まれた情報をより見落とさずに精度よく捉えるように指定を再定義
   const prompt = `
     配送指示書の画像またはPDFから、以下の情報を正確に読み取って指定のJSONフォーマットで出力してください。
 
@@ -746,7 +813,10 @@ async function runGeminiOCR(base64DataUrl) {
        - 住所 (address): 各届先名称に対応する「配送先住所」を正確に抽出してください。必ず届先名称と対応する正しい住所を1対1でペアにしてください。
 
     2. 車両ナンバー (vehicleNumber):
-       - カッコ［ ］または[ ]の中に書かれている車両のナンバー（例: 「品川100あ1234」など）を正確に抽出してください。見つからない場合は空文字 "" にしてください。
+       - 指示書の紙面上に、半角カッコ「[ ]」または全角カッコ「［ ］」に囲まれた状態で「足立100あ9999」や「練馬300わ1234」などの地名から始まる自動車登録番号（ナンバープレートの情報）が記載されています。
+       - このカッコ［ ］、[ ] に囲まれている車両ナンバー情報を正確に見つけ出して抽出してください。
+       - 抽出する際は、カッコ自体は含めずにカッコの中身のみ（例: "足立100あ9999"）にしてください。
+       - 該当する情報が見当たらない場合は、空文字 "" としてください。
   `;
 
   const responseSchema = {
