@@ -14,17 +14,34 @@ window.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // 1. ページ読み込み時にローカルキャッシュからファイル一覧を即時復元（体感待ち時間をなくす）
+  // 1. ページ読み込み時にローカルキャッシュからファイル一覧を即時復元
   restoreFilesFromCache();
 
   // 2. 自動ログイン（およびバックグラウンド裏同期）を試行
   tryAutoLogin();
 });
 
+// 【追加】アクセストークンを使ってGoogleからメールアドレスを取得する非同期関数
+async function fetchUserEmail(token) {
+  try {
+    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const userInfo = await res.json();
+      return userInfo.email || "";
+    }
+  } catch (err) {
+    console.error("ユーザー情報の取得に失敗しました:", err);
+  }
+  return "";
+}
+
 function login() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: "315078508163-ueu6f39u1fs2hfcr42bg2hb1qrjo4qq0.apps.googleusercontent.com",
-    scope: "https://www.googleapis.com/auth/drive.readonly",
+    // 【修正】スコープに「email」取得権限を追加
+    scope: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email",
     callback: async (res) => {
       accessToken = res.access_token;
 
@@ -37,6 +54,12 @@ function login() {
       const userEl = document.getElementById("driveUser");
       if (userEl) userEl.textContent = "ログイン済み";
       
+      // 【追加】ログイン成功時にメールアドレスを取得し、来訪カウンター処理を呼び出し
+      const email = await fetchUserEmail(accessToken);
+      if (typeof recordAndFetchVisitorCount === "function") {
+        recordAndFetchVisitorCount(email);
+      }
+
       // 手動ログイン時も段階的にロードを開始
       await loadDriveFiles();
     }
@@ -79,6 +102,13 @@ async function tryAutoLogin() {
         const currentCount = window.driveFiles ? window.driveFiles.length : 0;
         userEl.textContent = `自動ログイン済み (最新ファイルを裏で同期中... / 現在 ${currentCount} 件を表示中)`;
       }
+
+      // 【追加】自動ログイン復帰時にメールアドレスを取得して来訪カウンターを呼び出し
+      fetchUserEmail(accessToken).then((email) => {
+        if (typeof recordAndFetchVisitorCount === "function") {
+          recordAndFetchVisitorCount(email);
+        }
+      });
 
       // 非同期（裏側）で最新ファイルの段階的ロードを実行
       loadDriveFiles();
