@@ -1,7 +1,7 @@
 // delivery-app/js/counter.js
 
 // TODO: ご自身でデプロイしたGoogle Apps Script (GAS) の「ウェブアプリURL」に置き換えてください
-const COUNTER_API_URL = "https://script.google.com/macros/s/XXXXX_YOUR_GAS_URL_XXXXX/exec";
+const COUNTER_API_URL = "https://script.google.com/macros/s/AKfycbwRpoXkB3QFZ5w4hSVt62Z1u-xk-nU_mNmJwXf3WFqIrAxhgcWZmmCBXUUF_Oi-P9rA/exec";
 
 /**
  * 訪問者数をGASに記録し、画面のカウンター表示を更新します
