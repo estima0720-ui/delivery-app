@@ -453,7 +453,7 @@ async function verifyFileContentWithGemini(blob, mimeType, targetSS) {
 }
 
 // ==========================================
-// 8. ファイルアップロード選択時のOCR処理
+// 8. ファイルアップロード選択時のOCR処理（車番・住所の1対1対応強化）
 // ==========================================
 function handleFile(e) {
   const file = e.target.files[0];
@@ -499,15 +499,20 @@ function handleFile(e) {
             { fullName: "EMo東東京 DDセルフ環七豊玉", coreKeyword: "豊玉", address: "東京都練馬区豊玉北3丁目24-15" },
             { fullName: "井口鉱油 朝霞本町SS", coreKeyword: "朝霞本町", address: "埼玉県朝霞市本町1丁目1-1" }
           ],
-          vehicleNumber: "足立100あ9999"
+          vehicleNumber: "46-23"
         };
         
         window.currentSSList = demoResult.destinations;
         window.currentVehicleNumber = demoResult.vehicleNumber;
 
-        const displayLines = [`【車両ナンバー】: ${window.currentVehicleNumber}`, `----------------------------------`];
-        demoResult.destinations.forEach(item => {
-          displayLines.push(`${item.fullName} (${item.address})`);
+        const displayLines = [];
+        displayLines.push(`【車両ナンバー】: ${window.currentVehicleNumber}`);
+        displayLines.push(`----------------------------------`);
+        demoResult.destinations.forEach((item, index) => {
+          displayLines.push(`[配送先 ${index + 1}]`);
+          displayLines.push(`名称: ${item.fullName}`);
+          displayLines.push(`住所: ${item.address || "(住所情報なし)"}`);
+          displayLines.push(``);
         });
 
         if (typeof UI !== "undefined" && typeof UI.setOCR === "function") {
@@ -544,10 +549,11 @@ function handleFile(e) {
         displayLines.push(`----------------------------------`);
       }
 
-      ssList.forEach(item => {
-        const name = item.fullName || "名称不明";
-        const addr = item.address ? ` (${item.address})` : "";
-        displayLines.push(`${name}${addr}`);
+      ssList.forEach((item, index) => {
+        displayLines.push(`[配送先 ${index + 1}]`);
+        displayLines.push(`名称: ${item.fullName || "名称不明"}`);
+        displayLines.push(`住所: ${item.address || "(住所情報なし)"}`);
+        displayLines.push(``);
       });
       
       if (typeof UI !== "undefined" && typeof UI.setOCR === "function") {
@@ -946,7 +952,7 @@ window.switchToGoogleMap = function(fileName) {
 async function runGeminiOCR(base64DataUrl) {
   const activeKey = getGeminiApiKey();
   if (!activeKey) {
-    throw new Error("GeminiのAPIキーが設定されていません。");
+    throw new Error("Gemini of API key is not configured.");
   }
 
   const matches = base64DataUrl.match(/^data:(image\/.+|application\/pdf);base64,(.*)$/);
@@ -964,7 +970,7 @@ async function runGeminiOCR(base64DataUrl) {
 
     2. 車両ナンバー (vehicleNumber):
        - 指示書紙面の上部付近（例:「輸送会社 丸運」「荷積開始時刻」などの周辺）にある「車番」「車両」などのキーワードエリアをくまなく探してください。
-       - 例えば、「車番  D  22226 [46-23]」のように、車番（または管理用英数字記号）の右隣に、半角カッコ「[ ]」または全角カッコ「［ ］」に囲まれたテキスト（例: 「[46-23]」「[12-34]」など）が書かれています。
+       - 例えば、「車番  D  22226 [46-23]」や「車番［46-23］」のように、車番（または管理用英数字記号）の右隣に、半角カッコ「[ ]」または全角カッコ「［ ］」に囲まれたテキスト（例: 「[46-23]」「[12-34]」など）が書かれています。
        - この カッコ「[ ]」「［ ］」に囲まれている部分を、最優先で車番（自動車の登録番号の一部）として特定して抽出してください。
        - 抽出の際、カッコ記号自体は含めず、カッコの中身の文字列のみ（例: "46-23"）を正確に抽出してください。
        - もしカッコの中身が空欄である、あるいはカッコが見当たらない場合に、車番キーワードに直結して「D 22226」や「D-22226」といった車両コードのみが書かれている場合は、その車両コード全体を抽出してください。

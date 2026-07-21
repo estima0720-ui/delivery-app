@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>配送指示書ナビ</title>
 
+  <!-- iOS（iPhone）ホーム画面追加時の設定 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="配送ナビ">
+  
+  <!-- ご自身でデザインしたアイコン画像をルートに配置して指定（180x180px推奨） -->
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+
   <link rel="stylesheet" href="./css/style.css">
 </head>
 
@@ -84,7 +92,8 @@
   <!-- 4. OCR結果 -->
   <section class="card">
     <h2>🧠 OCR結果</h2>
-    <div id="ocrText">（未処理）</div>
+    <!-- 改行がそのまま反映されるように style="white-space: pre-wrap;" を追加 -->
+    <div id="ocrText" style="white-space: pre-wrap; background: #fdfdfd; padding: 10px; border: 1px solid #eee; border-radius: 4px; font-family: monospace;">（未処理）</div>
   </section>
 
   <!-- 5. ランキング -->
