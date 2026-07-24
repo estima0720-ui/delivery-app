@@ -21,6 +21,58 @@ window.addEventListener("DOMContentLoaded", () => {
   tryAutoLogin();
 });
 
+// Google Identity Services (GIS) クライアントの初期化
+function initGisClient() {
+  if (tokenClient) return; // 二重初期化防止
+
+  if (typeof google === "undefined" || !google.accounts || !google.accounts.oauth2) {
+    console.warn("【Google Drive】Google Identity Services SDK がまだロードされていません。");
+    return;
+  }
+
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: "315078508163-ueu6f39u1fs2hfcr42bg2hb1qrjo4qq0.apps.googleusercontent.com",
+    // スコープに「email」取得権限を追加
+    scope: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email",
+    callback: async (res) => {
+      // エラー処理（サイレント更新が拒否された、またはユーザーがキャンセルした等）
+      if (res.error !== undefined) {
+        console.warn("【Google Drive】自動ログイン（サイレント更新）に失敗しました。手動ログインが必要です:", res.error);
+        localStorage.removeItem("gdrive_access_token");
+        localStorage.removeItem("gdrive_expires_at");
+        accessToken = null;
+
+        const userEl = document.getElementById("driveUser");
+        if (userEl) {
+          const count = window.driveFiles ? window.driveFiles.length : 0;
+          userEl.textContent = `未ログイン (キャッシュ ${count} 件を表示中)`;
+        }
+        return;
+      }
+
+      accessToken = res.access_token;
+
+      const expiresIn = res.expires_in ? parseInt(res.expires_in, 10) : 3600;
+      const expiresAt = Date.now() + (expiresIn * 1000);
+
+      localStorage.setItem("gdrive_access_token", accessToken);
+      localStorage.setItem("gdrive_expires_at", expiresAt.toString());
+
+      const userEl = document.getElementById("driveUser");
+      if (userEl) userEl.textContent = "ログイン済み";
+      
+      // ログイン成功時にメールアドレスを取得し、来訪カウンター処理を呼び出し
+      const email = await fetchUserEmail(accessToken);
+      if (typeof recordAndFetchVisitorCount === "function") {
+        recordAndFetchVisitorCount(email);
+      }
+
+      // 段階的にロードを開始
+      await loadDriveFiles();
+    }
+  });
+}
+
 // 【追加】アクセストークンを使ってGoogleからメールアドレスを取得する非同期関数
 async function fetchUserEmail(token) {
   try {
@@ -38,33 +90,11 @@ async function fetchUserEmail(token) {
 }
 
 function login() {
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: "315078508163-ueu6f39u1fs2hfcr42bg2hb1qrjo4qq0.apps.googleusercontent.com",
-    // 【修正】スコープに「email」取得権限を追加
-    scope: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email",
-    callback: async (res) => {
-      accessToken = res.access_token;
-
-      const expiresIn = res.expires_in ? parseInt(res.expires_in, 10) : 3600;
-      const expiresAt = Date.now() + (expiresIn * 1000);
-
-      localStorage.setItem("gdrive_access_token", accessToken);
-      localStorage.setItem("gdrive_expires_at", expiresAt.toString());
-
-      const userEl = document.getElementById("driveUser");
-      if (userEl) userEl.textContent = "ログイン済み";
-      
-      // 【追加】ログイン成功時にメールアドレスを取得し、来訪カウンター処理を呼び出し
-      const email = await fetchUserEmail(accessToken);
-      if (typeof recordAndFetchVisitorCount === "function") {
-        recordAndFetchVisitorCount(email);
-      }
-
-      // 手動ログイン時も段階的にロードを開始
-      await loadDriveFiles();
-    }
-  });
-  tokenClient.requestAccessToken();
+  initGisClient();
+  if (tokenClient) {
+    // 手動で明示的に押した場合は、アカウント選択プロンプトを表示して確実にログインさせます
+    tokenClient.requestAccessToken({ prompt: "select_account" });
+  }
 }
 
 // キャッシュからのファイル即時復元処理
@@ -91,9 +121,13 @@ async function tryAutoLogin() {
   const expiresAtStr = localStorage.getItem("gdrive_expires_at");
   const userEl = document.getElementById("driveUser");
 
+  // Google認証クライアントを事前に準備
+  initGisClient();
+
   if (cachedToken && expiresAtStr) {
     const expiresAt = parseInt(expiresAtStr, 10);
     
+    // トークンがまだ有効な場合 (5分の猶予を持たせる)
     if (Date.now() < (expiresAt - 5 * 60 * 1000)) {
       accessToken = cachedToken;
       console.log("【Google Drive】有効なトークンを検出。最新データから段階的にバックグラウンド同期します。");
@@ -103,7 +137,7 @@ async function tryAutoLogin() {
         userEl.textContent = `自動ログイン済み (最新ファイルを裏で同期中... / 現在 ${currentCount} 件を表示中)`;
       }
 
-      // 【追加】自動ログイン復帰時にメールアドレスを取得して来訪カウンターを呼び出し
+      // 自動ログイン復帰時にメールアドレスを取得して来訪カウンターを呼び出し
       fetchUserEmail(accessToken).then((email) => {
         if (typeof recordAndFetchVisitorCount === "function") {
           recordAndFetchVisitorCount(email);
@@ -116,8 +150,18 @@ async function tryAutoLogin() {
     }
   }
 
-  localStorage.removeItem("gdrive_access_token");
-  localStorage.removeItem("gdrive_expires_at");
+  // トークンがない、または期限切れの場合
+  // ユーザーが過去に本アプリに認証を与えている場合、確認ダイアログなしでトークンをサイレントに再取得します
+  if (tokenClient) {
+    console.log("【Google Drive】トークン期限切れのため、サイレント更新を試みます。");
+    if (userEl) userEl.textContent = "自動ログイン試行中...";
+    
+    // prompt: '' を指定することで、UIのポップアップを介さずに新しいトークンをリクエストします
+    tokenClient.requestAccessToken({ prompt: "" });
+  } else {
+    localStorage.removeItem("gdrive_access_token");
+    localStorage.removeItem("gdrive_expires_at");
+  }
 }
 
 // 段階的（プログレッシブ）に取得データをUIおよびグローバル変数へ反映するヘルパー
@@ -183,7 +227,7 @@ async function loadDriveFiles() {
 
   try {
     do {
-      // 【最新優先ロード】orderBy=modifiedTime desc を付与して「最新順」にAPIから取得します
+      // 【最新優先ロード】orderBy=modifiedTime desc を付与して「最新順」にAPIから取得
       let url = `https://www.googleapis.com/drive/v3/files?fields=nextPageToken,files(id,name,modifiedTime,webViewLink)&q=${query}&pageSize=1000&orderBy=modifiedTime desc`;
       if (nextPageToken) {
         url += `&pageToken=${nextPageToken}`;
@@ -209,13 +253,13 @@ async function loadDriveFiles() {
         allFiles = allFiles.concat(data.files);
       }
       
-      // 【段階的反映】1ページ（1000件）取得するたびに、画面とデータを即時更新（裏同期中も操作可能にします）
+      // 【段階的反映】1ページ（1000件）取得するたびに画面とデータを即時更新
       applyDriveFilesToUI(allFiles, false);
 
       nextPageToken = data.nextPageToken;
     } while (nextPageToken);
 
-    // 全ページの読み込みが終わったら、最終保存と完了ステータス更新を行います
+    // 全ページの読み込みが終わったら、最終保存と完了ステータス更新を行う
     applyDriveFilesToUI(allFiles, true);
     
   } catch (error) {
